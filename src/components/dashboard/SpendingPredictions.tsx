@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Sparkles, TrendingUp, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Sparkles, TrendingUp } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { formatCurrency } from '../../lib/format';
 

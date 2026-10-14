@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, Repeat, Calendar, Trash2, CheckCircle2, Clock, DollarSign } from 'lucide-react';
+import { Plus, Repeat, Trash2 } from 'lucide-react';
 import { useRecurring, type RecurringItem } from '../hooks/useRecurring';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
-import { categories, expenseCategories, incomeCategories, getCategoryMeta } from '../lib/constants';
+import { expenseCategories, incomeCategories, getCategoryMeta } from '../lib/constants';
 import { formatCurrency, formatDate, todayISO, cn } from '../lib/format';
 
 export default function RecurringPage() {

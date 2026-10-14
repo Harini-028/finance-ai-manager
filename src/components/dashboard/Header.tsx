@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, Sun, Moon, ChevronDown, Settings, User, LogOut, CheckCheck, Trash2, X } from 'lucide-react';
+import { Search, Bell, Sun, Moon, ChevronDown, Settings, User, LogOut, CheckCheck, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDashboardData } from '../../hooks/useDashboardData';
-import { cn, initials, formatCurrency } from '../../lib/format';
+import { cn, initials } from '../../lib/format';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { theme, toggleTheme } = useTheme();

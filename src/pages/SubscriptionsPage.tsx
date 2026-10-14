@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, CreditCard, Calendar, Trash2, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Plus, CreditCard, Trash2 } from 'lucide-react';
 import { useSubscriptions, type SubscriptionItem } from '../hooks/useSubscriptions';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
