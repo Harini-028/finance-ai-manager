@@ -17,8 +17,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await signOut();
+    navigate('/');
+  };
 
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -248,7 +255,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
                   ))}
                   <div className="my-1 border-t border-ink-100 dark:border-ink-800" />
                   <button
-                    onClick={async () => { await signOut(); navigate('/'); }}
+                    onClick={() => { setMenuOpen(false); setShowLogoutConfirm(true); }}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-error-600 dark:text-error-400 hover:bg-error-500/10 transition-colors"
                   >
                     <LogOut className="h-4 w-4" />
@@ -260,6 +267,51 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="card w-full max-w-sm p-6 border border-ink-100 dark:border-ink-800 bg-white dark:bg-ink-900 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 text-amber-500">
+                <div className="p-2.5 rounded-xl bg-amber-500/10">
+                  <LogOut className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-ink-900 dark:text-white">Sign Out Confirmation</h4>
+                  <p className="text-xs text-ink-400">Are you sure you want to log out?</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-ink-600 dark:text-ink-300">
+                You will be redirected to the landing page. Your active session will be ended securely.
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="btn-secondary flex-1 text-xs py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmLogout}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-xl flex-1 text-xs py-2 transition-colors shadow-sm"
+                >
+                  Confirm Sign Out
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

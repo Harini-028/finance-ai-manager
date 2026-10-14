@@ -1,272 +1,501 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts';
-import {
-  TrendingUp, TrendingDown, Wallet, BarChart3, Target,
-  Sparkles, ArrowRight, Plus, AlertTriangle, CheckCircle2, Lightbulb, Info, FileText,
+  TrendingUp, TrendingDown, Sparkles, ArrowRight, Plus, AlertTriangle, CheckCircle2,
+  Lightbulb, Info, FileText, Target, Wallet, BarChart3, Calendar, Check, X,
 } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useAuth } from '../context/AuthContext';
 import { SummaryCard } from '../components/ui/SummaryCard';
 import { Spinner } from '../components/ui/Spinner';
 import {
-  computeSummary, dailyTrend, spendingByCategory, generateInsights, aiScoreLabel, projectedMonthEnd,
+  computeSummary, spendingByCategory, generateInsights, aiScoreLabel,
 } from '../lib/analytics';
-import { formatCurrency, formatCompact, formatDateShort, currentMonthKey, monthLabel } from '../lib/format';
+import { formatCurrency, monthLabel } from '../lib/format';
 import { FinancialHealthScore } from '../components/dashboard/FinancialHealthScore';
 import { SpendingPredictions } from '../components/dashboard/SpendingPredictions';
-import { getCategoryMeta, summaryIcons } from '../lib/constants';
+import { MonthlyFinancialOverview } from '../components/dashboard/MonthlyFinancialOverview';
+import { SmartAlertsSection } from '../components/dashboard/SmartAlertsSection';
+import { RecentTransactionsSection } from '../components/dashboard/RecentTransactionsSection';
+import { summaryIcons, categories } from '../lib/constants';
 
 const insightIcons: Record<string, typeof TrendingUp> = {
-  'trending-up': TrendingUp, 'trending-down': TrendingDown, 'alert-triangle': AlertTriangle,
-  'check-circle': CheckCircle2, lightbulb: Lightbulb, info: Info, 'file-text': FileText,
-  target: Target, wallet: Wallet, gauge: BarChart3,
+  'trending-up': TrendingUp,
+  'trending-down': TrendingDown,
+  'alert-triangle': AlertTriangle,
+  'check-circle': CheckCircle2,
+  lightbulb: Lightbulb,
+  info: Info,
+  'file-text': FileText,
+  target: Target,
+  wallet: Wallet,
+  gauge: BarChart3,
 };
 
 const insightStyles: Record<string, string> = {
-  positive: 'border-brand-500/30 bg-brand-500/5',
-  warning: 'border-warning-500/30 bg-warning-500/5',
-  negative: 'border-error-500/30 bg-error-500/5',
-  info: 'border-accent-500/30 bg-accent-500/5',
+  positive: 'border-emerald-500/30 bg-emerald-500/5',
+  warning: 'border-amber-500/30 bg-amber-500/5',
+  negative: 'border-rose-500/30 bg-rose-500/5',
+  info: 'border-blue-500/30 bg-blue-500/5',
   tip: 'border-violet-500/30 bg-violet-500/5',
 };
 
 const insightIconColors: Record<string, string> = {
-  positive: 'text-brand-500', warning: 'text-warning-500', negative: 'text-error-500',
-  info: 'text-accent-500', tip: 'text-violet-500',
+  positive: 'text-emerald-500',
+  warning: 'text-amber-500',
+  negative: 'text-rose-500',
+  info: 'text-blue-500',
+  tip: 'text-violet-500',
 };
 
 export default function DashboardPage() {
   const { profile } = useAuth();
-  const { transactions, budgets, loading } = useDashboardData();
-  const currency = profile?.currency ?? 'USD';
-  const monthKey = currentMonthKey();
+  const {
+    transactions,
+    budgets,
+    investments,
+    dashboardSummary,
+    selectedMonth,
+    setSelectedMonth,
+    loading,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+  } = useDashboardData();
 
-  const summary = useMemo(() => computeSummary(transactions, budgets, monthKey), [transactions, budgets, monthKey]);
-  const trend = useMemo(() => dailyTrend(transactions, monthKey), [transactions, monthKey]);
-  const catData = useMemo(() => spendingByCategory(transactions, monthKey), [transactions, monthKey]);
-  const insights = useMemo(() => generateInsights(transactions, budgets, monthKey), [transactions, budgets, monthKey]);
-  const projected = useMemo(() => projectedMonthEnd(transactions, monthKey), [transactions, monthKey]);
-  const scoreInfo = aiScoreLabel(summary.aiScore);
+  // Respect user preference or default to INR
+  const currency = profile?.currency || 'INR';
 
-  const recentTx = useMemo(() => [...transactions].slice(0, 6), [transactions]);
+  // Add Transaction Modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({
+    description: '',
+    amount: '',
+    category: 'Food & Dining',
+    type: 'expense' as 'income' | 'expense',
+    date: new Date().toISOString().slice(0, 10),
+  });
+  const [addingSubmitting, setAddingSubmitting] = useState(false);
 
-  const pieData = catData.slice(0, 6).map((c) => ({ name: c.category, value: c.amount, color: getCategoryMeta(c.category).color }));
+  // Month options for filtering (last 6 months)
+  const monthOptions = useMemo(() => {
+    const list = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      list.push({
+        key,
+        label: i === 0 ? `${monthLabel(key)} (Current)` : monthLabel(key),
+      });
+    }
+    return list;
+  }, []);
 
-  if (loading) {
+  // Summary Metrics: prioritize backend-verified summary, fallback to client-side compute
+  const totalInvestmentsVal = dashboardSummary?.summary?.totalInvestments ?? investments.reduce((s, i) => s + i.shares * (i.current_price || i.purchase_price), 0);
+  const clientSummary = useMemo(
+    () => computeSummary(transactions, budgets, selectedMonth, totalInvestmentsVal),
+    [transactions, budgets, selectedMonth, totalInvestmentsVal]
+  );
+
+  const summary = dashboardSummary?.summary || {
+    totalIncome: clientSummary.totalIncome,
+    totalExpense: clientSummary.totalExpense,
+    netSavings: clientSummary.savings,
+    savingsRate: clientSummary.savingsRate,
+    expenseRatio: clientSummary.expenseRatio,
+    totalInvestments: totalInvestmentsVal,
+    investmentsCount: investments.length,
+    totalBudget: clientSummary.monthlyBudgetTotal,
+    budgetSpent: clientSummary.budgetUsed,
+    remainingBudget: clientSummary.budgetRemaining,
+    budgetUtilization: clientSummary.budgetUtilization,
+    totalSavingsGoals: 0,
+    financialHealth: {
+      score: clientSummary.aiScore,
+      label: aiScoreLabel(clientSummary.aiScore).label,
+      grade: aiScoreLabel(clientSummary.aiScore).grade,
+      color: aiScoreLabel(clientSummary.aiScore).color,
+      isInsufficientData: clientSummary.isInsufficientData,
+      breakdown: [],
+      recommendations: [],
+    },
+  };
+
+  const momComparison = dashboardSummary?.momComparison || {
+    hasPrevData: false,
+    prevMonthStr: '',
+    prevIncome: 0,
+    prevExpense: 0,
+    prevSavings: 0,
+    incomeChangePct: null,
+    expenseChangePct: null,
+    savingsChangePct: null,
+  };
+
+  const predictions = dashboardSummary?.predictions;
+  const smartAlerts = dashboardSummary?.smartAlerts || [];
+  const categoryBreakdown = dashboardSummary?.categoryBreakdown || spendingByCategory(transactions, selectedMonth);
+  const budgetComparison = dashboardSummary?.budgetComparison || [];
+  const historicalTrend = dashboardSummary?.historicalTrend || [];
+  const recentTransactions = dashboardSummary?.recentTransactions || transactions.slice(0, 8);
+
+  const insights = useMemo(() => generateInsights(transactions, budgets, selectedMonth), [transactions, budgets, selectedMonth]);
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.amount || Number(addForm.amount) <= 0) return;
+    setAddingSubmitting(true);
+    await addTransaction({
+      description: addForm.description,
+      amount: Number(addForm.amount),
+      category: addForm.category,
+      type: addForm.type,
+      date: addForm.date,
+    });
+    setAddingSubmitting(false);
+    setShowAddModal(false);
+    setAddForm({
+      description: '',
+      amount: '',
+      category: 'Food & Dining',
+      type: 'expense',
+      date: new Date().toISOString().slice(0, 10),
+    });
+  };
+
+  if (loading && !dashboardSummary && transactions.length === 0) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <Spinner size={32} />
+      <div className="flex flex-col items-center justify-center py-36 space-y-4">
+        <Spinner size={36} />
+        <p className="text-sm text-ink-400">Loading your financial dashboard…</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header row */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-7 pb-12">
+      {/* Header Row */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
         <div>
-          <h1 className="font-display text-2xl lg:text-3xl font-bold text-ink-900 dark:text-white tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-ink-500 dark:text-ink-400">{monthLabel(monthKey)} · Your financial overview</p>
+          <h1 className="font-display text-2xl lg:text-3xl font-bold text-ink-900 dark:text-white tracking-tight">
+            Financial Dashboard
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-ink-500 dark:text-ink-400">
+            {monthLabel(selectedMonth)} · AI-powered cash flow and wealth analytics
+          </p>
         </div>
-        <Link to="/app/transactions" className="btn-primary text-sm">
-          <Plus className="h-4 w-4" /> Add Transaction
-        </Link>
+
+        <div className="flex items-center gap-3">
+          {/* Month Selector Dropdown */}
+          <div className="relative flex items-center gap-1.5 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 px-3 py-1.5 shadow-sm">
+            <Calendar className="h-4 w-4 text-ink-400 shrink-0" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-ink-800 dark:text-ink-200 focus:outline-none cursor-pointer pr-1"
+            >
+              {monthOptions.map((opt) => (
+                <option key={opt.key} value={opt.key} className="bg-white dark:bg-ink-900 text-ink-900 dark:text-white">
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary text-xs sm:text-sm flex items-center gap-1.5 shadow-soft"
+          >
+            <Plus className="h-4 w-4" /> Add Transaction
+          </button>
+        </div>
       </motion.div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <SummaryCard label="Total Income" value={formatCurrency(summary.totalIncome, currency)} icon={summaryIcons.income} gradient="gradient-brand" delay={0} />
-        <SummaryCard label="Total Expenses" value={formatCurrency(summary.totalExpense, currency)} icon={summaryIcons.expense} gradient="gradient-warm" delay={0.05} />
-        <SummaryCard label="Net Savings" value={formatCurrency(summary.savings, currency)} icon={summaryIcons.savings} gradient="gradient-accent" delay={0.1} changeLabel={`${summary.savingsRate}% rate`} />
-        <SummaryCard label="Investments" value={formatCurrency(summary.investments, currency)} icon={summaryIcons.investments} gradient="gradient-violet" delay={0.15} />
-        <SummaryCard label="Monthly Budget" value={formatCurrency(summary.monthlyBudgetTotal, currency)} icon={summaryIcons.budget} gradient="gradient-cool" delay={0.2} changeLabel={`${summary.budgetUtilization}% used`} />
-        <SummaryCard label="AI Score" value={`${summary.aiScore}/100`} icon={summaryIcons.goal} gradient="gradient-brand" delay={0.25} changeLabel={scoreInfo.label} />
+      {/* 6 Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+        {/* 1. Total Income */}
+        <SummaryCard
+          label="Total Income"
+          value={formatCurrency(summary.totalIncome, currency)}
+          icon={summaryIcons.income}
+          gradient="gradient-brand"
+          change={momComparison.hasPrevData ? momComparison.incomeChangePct : null}
+          changeLabel={momComparison.hasPrevData ? 'vs prev mo' : 'Current month'}
+          tooltip="Sum of all verified income received during the selected month."
+          delay={0}
+        />
+
+        {/* 2. Total Expenses */}
+        <SummaryCard
+          label="Total Expenses"
+          value={formatCurrency(summary.totalExpense, currency)}
+          icon={summaryIcons.expense}
+          gradient="gradient-warm"
+          change={momComparison.hasPrevData ? momComparison.expenseChangePct : null}
+          changeLabel={momComparison.hasPrevData ? 'vs prev mo' : 'Current month'}
+          invertChangeColor={true}
+          tooltip="Sum of all expense transactions across all categories."
+          delay={0.04}
+        />
+
+        {/* 3. Net Savings */}
+        <SummaryCard
+          label="Net Savings"
+          value={formatCurrency(summary.netSavings, currency)}
+          icon={summaryIcons.savings}
+          gradient="gradient-accent"
+          changeLabel={summary.totalIncome > 0 ? `${summary.savingsRate}% rate` : (summary.totalExpense > 0 ? 'Deficit' : 'Balanced')}
+          tooltip="Total Income minus Total Expenses. A positive figure indicates wealth accumulation."
+          delay={0.08}
+        />
+
+        {/* 4. Investments */}
+        <SummaryCard
+          label="Investments"
+          value={formatCurrency(summary.totalInvestments, currency)}
+          icon={summaryIcons.investments}
+          gradient="gradient-violet"
+          changeLabel={summary.investmentsCount > 0 ? `${summary.investmentsCount} holdings` : 'Track assets'}
+          tooltip="Total current market valuation of your stocks, mutual funds, gold, and portfolio assets."
+          delay={0.12}
+        />
+
+        {/* 5. Monthly Budget */}
+        <SummaryCard
+          label="Monthly Budget"
+          value={formatCurrency(summary.totalBudget, currency)}
+          icon={summaryIcons.budget}
+          gradient="gradient-cool"
+          changeLabel={summary.totalBudget > 0 ? `${summary.budgetUtilization}% used` : 'No budget set'}
+          tooltip="Total active budget limit configured for this month across all categories."
+          delay={0.16}
+        />
+
+        {/* 6. AI Health Score */}
+        <SummaryCard
+          label="AI Health Score"
+          value={summary.financialHealth.isInsufficientData ? '--/100' : `${summary.financialHealth.score}/100`}
+          icon={summaryIcons.goal}
+          gradient="gradient-brand"
+          changeLabel={summary.financialHealth.label}
+          tooltip="Holistic score (0-100) assessing cash flow, savings rate, budget discipline, and wealth buffer."
+          delay={0.2}
+        />
       </div>
 
-      {/* Financial Health Score Breakdown */}
+      {/* Smart Alerts Section */}
+      <SmartAlertsSection alerts={smartAlerts} />
+
+      {/* Unified Financial Health Score Breakdown */}
       <FinancialHealthScore
+        healthData={summary.financialHealth}
         savingsRate={summary.savingsRate}
-        budgetUtilization={summary.budgetUtilization}
+        expenseRatio={summary.expenseRatio}
         totalIncome={summary.totalIncome}
         totalExpense={summary.totalExpense}
-        investments={summary.investments}
+        investments={summary.totalInvestments}
+        currency={currency}
       />
 
-      {/* AI Predictions */}
+      {/* AI Spending Predictions */}
       <SpendingPredictions
+        predictions={predictions}
+        historicalTrend={historicalTrend}
         totalIncome={summary.totalIncome}
         totalExpense={summary.totalExpense}
         currency={currency}
-        categorySpending={catData}
+        categorySpending={categoryBreakdown}
       />
 
-      {/* Charts row */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Income vs Expense trend */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-2 card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-display font-semibold text-ink-900 dark:text-white">Income vs Expenses</h3>
-              <p className="text-xs text-ink-400">Daily breakdown this month</p>
-            </div>
-            <div className="flex gap-3 text-xs">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-500" /> Income</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-warning-500" /> Expense</span>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trend}>
-              <defs>
-                <linearGradient id="incomeG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#19b97e" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#19b97e" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="expenseG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={3} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCompact(v, currency)} />
-              <Tooltip
-                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', fontSize: 12 }}
-                formatter={(v) => formatCurrency(Number(v), currency)}
-              />
-              <Area type="monotone" dataKey="income" stroke="#19b97e" strokeWidth={2} fill="url(#incomeG)" />
-              <Area type="monotone" dataKey="expense" stroke="#f59e0b" strokeWidth={2} fill="url(#expenseG)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </motion.div>
+      {/* Monthly Financial Overview */}
+      <MonthlyFinancialOverview
+        historicalTrend={historicalTrend}
+        categoryBreakdown={categoryBreakdown}
+        budgetComparison={budgetComparison}
+        momComparison={momComparison}
+        totalIncome={summary.totalIncome}
+        totalExpense={summary.totalExpense}
+        currency={currency}
+        selectedMonth={selectedMonth}
+        onMonthChange={setSelectedMonth}
+      />
 
-        {/* Spending by category pie */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
-          <h3 className="font-display font-semibold text-ink-900 dark:text-white mb-1">Spending Breakdown</h3>
-          <p className="text-xs text-ink-400 mb-4">By category this month</p>
-          {pieData.length === 0 ? (
-            <div className="h-[260px] flex items-center justify-center text-sm text-ink-400">No expenses yet</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3}>
-                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip formatter={(v) => formatCurrency(Number(v), currency)} contentStyle={{ borderRadius: 12, border: 'none', fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </motion.div>
-      </div>
+      {/* Grid: AI Insights + Recent Transactions */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Recent Transactions with Inline Edit and Delete Modals */}
+        <RecentTransactionsSection
+          transactions={recentTransactions}
+          currency={currency}
+          onUpdate={updateTransaction}
+          onDelete={deleteTransaction}
+          onAddClick={() => setShowAddModal(true)}
+        />
 
-      {/* AI Insights + Recent transactions */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* AI Insights */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-2 card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl gradient-violet text-white">
-                <Sparkles className="h-5 w-5" />
+        {/* AI Financial Recommendations & Insights */}
+        <div className="card p-6 border border-ink-100 dark:border-ink-800/80 bg-white dark:bg-ink-900 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-500 text-white shadow-soft">
+                <Sparkles className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="font-display font-semibold text-ink-900 dark:text-white">AI Financial Insights</h3>
-                <p className="text-xs text-ink-400">Personalized recommendations</p>
+                <h3 className="font-display font-bold text-ink-900 dark:text-white">
+                  AI Financial Insights
+                </h3>
+                <p className="text-xs text-ink-400">Contextual advice based on your current cash flow</p>
               </div>
             </div>
-            <Link to="/app/ai-assistant" className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1">
-              View all <ArrowRight className="h-3.5 w-3.5" />
+            <Link
+              to="/app/ai-assistant"
+              className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
+            >
+              Ask AI Advisor <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-            {insights.slice(0, 5).map((ins) => {
+
+          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+            {insights.map((ins) => {
               const Icon = insightIcons[ins.icon] ?? Info;
+              const style = insightStyles[ins.type] || insightStyles.info;
+              const iconCol = insightIconColors[ins.type] || 'text-brand-500';
+
               return (
-                <div key={ins.id} className={`rounded-xl border p-4 ${insightStyles[ins.type]}`}>
+                <div key={ins.id} className={`rounded-xl border p-3.5 ${style}`}>
                   <div className="flex items-start gap-3">
-                    <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${insightIconColors[ins.type]}`} />
+                    <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${iconCol}`} />
                     <div>
-                      <p className="font-semibold text-sm text-ink-900 dark:text-white">{ins.title}</p>
-                      <p className="mt-0.5 text-sm text-ink-500 dark:text-ink-400 leading-snug">{ins.message}</p>
+                      <p className="font-semibold text-xs text-ink-900 dark:text-white">{ins.title}</p>
+                      <p className="mt-0.5 text-xs text-ink-600 dark:text-ink-300 leading-relaxed">
+                        {ins.message}
+                      </p>
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </motion.div>
-
-        {/* Recent transactions */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display font-semibold text-ink-900 dark:text-white">Recent Activity</h3>
-            <Link to="/app/transactions" className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline">All</Link>
-          </div>
-          {recentTx.length === 0 ? (
-            <div className="py-10 text-center">
-              <p className="text-sm text-ink-400 mb-3">No transactions yet</p>
-              <Link to="/app/transactions" className="btn-primary text-sm"><Plus className="h-4 w-4" /> Add first</Link>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {recentTx.map((t) => {
-                const meta = getCategoryMeta(t.category);
-                return (
-                  <div key={t.id} className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors">
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${meta.gradient} text-white shrink-0`}>
-                      <meta.icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-ink-900 dark:text-white truncate">{t.description || t.category}</p>
-                      <p className="text-xs text-ink-400">{formatDateShort(t.date)} · {t.category}</p>
-                    </div>
-                    <span className={`text-sm font-semibold ${t.type === 'income' ? 'text-brand-600 dark:text-brand-400' : 'text-ink-700 dark:text-ink-200'}`}>
-                      {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, currency)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </motion.div>
+        </div>
       </div>
 
-      {/* Budget projection bar */}
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div>
-            <h3 className="font-display font-semibold text-ink-900 dark:text-white">Month-End Projection</h3>
-            <p className="text-xs text-ink-400">Based on your current spending pace</p>
+      {/* Quick Add Transaction Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="card w-full max-w-md p-6 border border-ink-100 dark:border-ink-800 bg-white dark:bg-ink-900 shadow-2xl relative"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-ink-100 dark:border-ink-800">
+                <h4 className="font-display font-bold text-lg text-ink-900 dark:text-white">
+                  Add Transaction
+                </h4>
+                <button onClick={() => setShowAddModal(false)} className="text-ink-400 hover:text-ink-600">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddSubmit} className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 gap-2 p-1 bg-ink-100 dark:bg-ink-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setAddForm((p) => ({ ...p, type: 'expense' }))}
+                    className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${addForm.type === 'expense' ? 'bg-white dark:bg-ink-900 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-ink-500'}`}
+                  >
+                    Expense
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddForm((p) => ({ ...p, type: 'income' }))}
+                    className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${addForm.type === 'income' ? 'bg-white dark:bg-ink-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-ink-500'}`}
+                  >
+                    Income
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink-500 dark:text-ink-400 block mb-1">
+                    Amount ({currency})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    placeholder="e.g. 5000"
+                    value={addForm.amount}
+                    onChange={(e) => setAddForm((p) => ({ ...p, amount: e.target.value }))}
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink-500 dark:text-ink-400 block mb-1">Category</label>
+                  <select
+                    value={addForm.category}
+                    onChange={(e) => setAddForm((p) => ({ ...p, category: e.target.value }))}
+                    className="input-field text-sm"
+                  >
+                    {categories
+                      .filter((c) => (addForm.type === 'income' ? c.type === 'income' || c.type === 'both' : c.type === 'expense' || c.type === 'both'))
+                      .map((c) => (
+                        <option key={c.name} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink-500 dark:text-ink-400 block mb-1">Description</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Salary, Rent, Grocery shopping"
+                    value={addForm.description}
+                    onChange={(e) => setAddForm((p) => ({ ...p, description: e.target.value }))}
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-ink-500 dark:text-ink-400 block mb-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={addForm.date}
+                    onChange={(e) => setAddForm((p) => ({ ...p, date: e.target.value }))}
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="btn-secondary flex-1 text-sm py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addingSubmitting}
+                    className="btn-primary flex-1 text-sm py-2 flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="h-4 w-4" /> Save Record
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-          <div className="flex gap-6">
-            <div>
-              <p className="text-xs text-ink-400">Spent so far</p>
-              <p className="font-display font-bold text-ink-900 dark:text-white">{formatCurrency(summary.totalExpense, currency)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-ink-400">Projected total</p>
-              <p className="font-display font-bold text-warning-600 dark:text-warning-400">{formatCurrency(projected, currency)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="h-3 rounded-full bg-ink-100 dark:bg-ink-800 overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${Math.min(summary.budgetUtilization, 100)}%` }}
-            transition={{ duration: 1, delay: 0.4 }}
-            className={`h-full rounded-full ${summary.budgetUtilization > 90 ? 'gradient-warm' : 'gradient-brand'}`}
-          />
-        </div>
-        <p className="mt-2 text-xs text-ink-400">
-          {summary.monthlyBudgetTotal > 0
-            ? `${summary.budgetUtilization}% of ${formatCurrency(summary.monthlyBudgetTotal, currency)} budget used`
-            : 'Set up a budget to unlock projection alerts'}
-        </p>
-      </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

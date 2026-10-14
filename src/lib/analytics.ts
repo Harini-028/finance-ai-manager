@@ -8,30 +8,36 @@ export type Summary = {
   totalExpense: number;
   savings: number;
   savingsRate: number;
+  expenseRatio: number;
   investments: number;
   monthlyBudgetTotal: number;
   budgetUsed: number;
   budgetRemaining: number;
   budgetUtilization: number;
   aiScore: number;
+  isInsufficientData: boolean;
 };
 
 export const computeSummary = (
   transactions: TransactionRow[],
   budgets: Budget[],
   monthKey = currentMonthKey(),
+  investmentsTotal = 0,
 ): Summary => {
   const monthTx = transactions.filter((t) => isSameMonth(t.date, monthKey));
   const totalIncome = round2(monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0));
   const totalExpense = round2(monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
   const savings = round2(totalIncome - totalExpense);
   const savingsRate = totalIncome > 0 ? round2((savings / totalIncome) * 100) : 0;
+  const expenseRatio = totalIncome > 0 ? round2((totalExpense / totalIncome) * 100) : (totalExpense > 0 ? 100 : 0);
 
-  const investments = round2(
-    monthTx
-      .filter((t) => t.type === 'income' && t.category === 'Investment')
-      .reduce((s, t) => s + t.amount, 0),
-  );
+  const investments = investmentsTotal > 0
+    ? round2(investmentsTotal)
+    : round2(
+        monthTx
+          .filter((t) => t.type === 'income' && t.category === 'Investment')
+          .reduce((s, t) => s + t.amount, 0),
+      );
 
   const monthlyBudgets = budgets.filter((b) => b.period === 'monthly' && b.month === monthKey);
   const monthlyBudgetTotal = round2(monthlyBudgets.reduce((s, b) => s + b.amount, 0));
@@ -49,14 +55,20 @@ export const computeSummary = (
       return s + Math.min(spent, b.amount);
     }, 0),
   );
-  const budgetRemaining = round2(monthlyBudgetTotal - budgetUsed);
+  const budgetRemaining = Math.max(0, round2(monthlyBudgetTotal - budgetUsed));
   const budgetUtilization = monthlyBudgetTotal > 0 ? round2((budgetUsed / monthlyBudgetTotal) * 100) : 0;
+
+  const isInsufficientData = transactions.length === 0;
 
   const aiScore = computeAiScore({
     savingsRate,
+    expenseRatio,
     budgetUtilization,
     hasBudget: monthlyBudgetTotal > 0,
     totalIncome,
+    totalExpense,
+    investments,
+    hasTransactions: transactions.length > 0,
   });
 
   return {
@@ -64,55 +76,97 @@ export const computeSummary = (
     totalExpense,
     savings,
     savingsRate,
+    expenseRatio,
     investments,
     monthlyBudgetTotal,
     budgetUsed,
     budgetRemaining,
     budgetUtilization,
     aiScore,
+    isInsufficientData,
   };
 };
 
 export const computeAiScore = (params: {
   savingsRate: number;
+  expenseRatio?: number;
   budgetUtilization: number;
   hasBudget: boolean;
   totalIncome: number;
+  totalExpense?: number;
+  investments?: number;
+  hasTransactions?: boolean;
 }): number => {
-  let score = 50;
-  if (params.savingsRate >= 20) score += 25;
-  else if (params.savingsRate >= 10) score += 15;
-  else if (params.savingsRate >= 0) score += 5;
-  else score -= 10;
-
-  if (params.hasBudget) {
-    if (params.budgetUtilization <= 80) score += 15;
-    else if (params.budgetUtilization <= 100) score += 5;
-    else score -= 10;
-  } else {
-    score -= 5;
+  if (params.hasTransactions === false || (params.totalIncome === 0 && (params.totalExpense || 0) === 0)) {
+    return 0;
   }
 
-  if (params.totalIncome > 0) score += 5;
+  let score = 0;
+
+  // 1. Savings Rate (up to 30 pts)
+  if (params.totalIncome > 0) {
+    if (params.savingsRate >= 25) score += 30;
+    else if (params.savingsRate >= 15) score += 22;
+    else if (params.savingsRate >= 5) score += 14;
+    else if (params.savingsRate >= 0) score += 6;
+  } else if ((params.totalExpense || 0) === 0) {
+    score += 15;
+  }
+
+  // 2. Expense Discipline (up to 25 pts)
+  const ratio = params.expenseRatio ?? (params.totalIncome > 0 ? ((params.totalExpense || 0) / params.totalIncome) * 100 : 100);
+  if (params.totalIncome > 0) {
+    if (ratio <= 50) score += 25;
+    else if (ratio <= 70) score += 20;
+    else if (ratio <= 85) score += 12;
+    else score += 4;
+  } else {
+    score += (params.totalExpense || 0) === 0 ? 15 : 5;
+  }
+
+  // 3. Budget Adherence (up to 25 pts)
+  if (params.hasBudget) {
+    if (params.budgetUtilization <= 80) score += 25;
+    else if (params.budgetUtilization <= 100) score += 18;
+    else score += 5;
+  } else {
+    score += 12;
+  }
+
+  // 4. Wealth Buffer (up to 20 pts)
+  if ((params.investments || 0) > 0) {
+    score += 20;
+  } else {
+    score += 5;
+  }
+
   return clampScore(score);
 };
 
 const clampScore = (n: number): number => Math.min(Math.max(Math.round(n), 0), 100);
 
-export type CategorySpending = { category: string; amount: number; count: number };
+export type CategorySpending = { category: string; amount: number; count: number; percentage: number };
 
 export const spendingByCategory = (transactions: TransactionRow[], monthKey = currentMonthKey()): CategorySpending[] => {
   const map = new Map<string, { amount: number; count: number }>();
+  let total = 0;
   transactions
     .filter((t) => t.type === 'expense' && isSameMonth(t.date, monthKey))
     .forEach((t) => {
       const cur = map.get(t.category) ?? { amount: 0, count: 0 };
       cur.amount += t.amount;
       cur.count += 1;
+      total += t.amount;
       map.set(t.category, cur);
     });
+
   return Array.from(map.entries())
-    .map(([category, v]) => ({ category, amount: round2(v.amount), count: v.count }))
+    .map(([category, v]) => ({
+      category,
+      amount: round2(v.amount),
+      count: v.count,
+      percentage: total > 0 ? round2((v.amount / total) * 100) : 0,
+    }))
     .sort((a, b) => b.amount - a.amount);
 };
 
@@ -124,7 +178,7 @@ export const dailyTrend = (transactions: TransactionRow[], monthKey = currentMon
   const points: DailyPoint[] = [];
   for (let day = 1; day <= total; day++) {
     const dateStr = `${monthKey}-${String(day).padStart(2, '0')}`;
-    const dayTx = transactions.filter((t) => t.date === dateStr);
+    const dayTx = transactions.filter((t) => t.date && t.date.slice(0, 10) === dateStr);
     points.push({
       date: dateStr,
       label: String(day),
@@ -178,7 +232,15 @@ export const generateInsights = (
   const total = daysInMonth(now);
   const monthFraction = passed / total;
 
-  if (summary.savingsRate >= 20) {
+  if (summary.totalIncome === 0 && summary.totalExpense > 0) {
+    insights.push({
+      id: 'no-income-recorded',
+      type: 'warning',
+      title: 'No income logged this month',
+      message: `You've recorded ${summary.totalExpense} in expenses with zero income logged. Add your salary or freelance earnings.`,
+      icon: 'alert-triangle',
+    });
+  } else if (summary.savingsRate >= 20) {
     insights.push({
       id: 'savings-good',
       type: 'positive',
@@ -210,7 +272,7 @@ export const generateInsights = (
         id: 'budget-high',
         type: 'warning',
         title: 'Budget nearly exhausted',
-        message: `You've used ${summary.budgetUtilization}% of your monthly budget with ${(1 - monthFraction) * 100 | 0}% of the month remaining. Slow down spending to stay on track.`,
+        message: `You've used ${summary.budgetUtilization}% of your monthly budget with ${(1 - monthFraction) * 100 | 0}% of the month remaining.`,
         icon: 'wallet',
       });
     } else if (summary.budgetUtilization > 70 && summary.budgetUtilization <= 90) {
@@ -241,11 +303,11 @@ export const generateInsights = (
         id: `over-${b.category}`,
         type: 'negative',
         title: `${b.category} over budget`,
-        message: `You've spent ${Math.round(pct)}% of your ${b.category} budget (${Math.round(pct - 100)}% over). Consider trimming this category next month.`,
+        message: `You've spent ${Math.round(pct)}% of your ${b.category} budget (${Math.round(pct - 100)}% over).`,
         icon: 'trending-down',
       });
     }
-  });
+  } );
 
   if (catSpending.length > 0) {
     const top = catSpending[0];
@@ -264,16 +326,8 @@ export const generateInsights = (
           id: `spend-up-${top.category}`,
           type: 'warning',
           title: `${top.category} spending increased`,
-          message: `Your ${top.category} spending is up ${Math.round(change)}% compared to last month. Review recent transactions to spot the cause.`,
+          message: `Your ${top.category} spending is up ${Math.round(change)}% compared to last month. Review recent transactions.`,
           icon: 'trending-up',
-        });
-      } else if (change < -15) {
-        insights.push({
-          id: `spend-down-${top.category}`,
-          type: 'positive',
-          title: `${top.category} spending decreased`,
-          message: `Nice work — your ${top.category} spending dropped ${Math.round(Math.abs(change))}% versus last month.`,
-          icon: 'trending-down',
         });
       }
     }
@@ -290,23 +344,18 @@ export const generateInsights = (
     });
   }
 
-  insights.push({
-    id: 'monthly-summary',
-    type: 'info',
-    title: 'Monthly financial summary',
-    message: `Income: ${summary.totalIncome} · Expenses: ${summary.totalExpense} · Net savings: ${summary.savings} · Budget used: ${summary.budgetUtilization}% · AI Score: ${summary.aiScore}/100.`,
-    icon: 'file-text',
-  });
-
   return insights;
 };
 
-export const aiScoreLabel = (score: number): { label: string; color: string } => {
-  if (score >= 80) return { label: 'Excellent', color: '#19b97e' };
-  if (score >= 65) return { label: 'Good', color: '#40d39b' };
-  if (score >= 50) return { label: 'Fair', color: '#f59e0b' };
-  if (score >= 35) return { label: 'Needs Work', color: '#f97316' };
-  return { label: 'At Risk', color: '#ef4444' };
+export const aiScoreLabel = (score: number, isInsufficientData = false): { label: string; color: string; grade: string } => {
+  if (isInsufficientData || score === 0) {
+    return { label: 'Setup Needed', color: '#94a3b8', grade: 'N/A' };
+  }
+  if (score >= 80) return { label: 'Excellent', color: '#10b981', grade: 'A+' };
+  if (score >= 65) return { label: 'Good', color: '#34d399', grade: 'B' };
+  if (score >= 50) return { label: 'Fair', color: '#f59e0b', grade: 'C' };
+  if (score >= 35) return { label: 'Needs Work', color: '#f97316', grade: 'D' };
+  return { label: 'At Risk', color: '#ef4444', grade: 'F' };
 };
 
 export const projectedMonthEnd = (transactions: TransactionRow[], monthKey = currentMonthKey()): number => {

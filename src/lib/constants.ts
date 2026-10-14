@@ -89,7 +89,7 @@ export const currencyMap = currencies.reduce((acc, c) => {
   return acc;
 }, {} as Record<string, (typeof currencies)[number]>);
 
-export const getCurrencySymbol = (code: string): string => currencyMap[code]?.symbol ?? '$';
+export const getCurrencySymbol = (code: string): string => currencyMap[code]?.symbol ?? '₹';
 
 export const languages = [
   { code: 'en', label: 'English' },
