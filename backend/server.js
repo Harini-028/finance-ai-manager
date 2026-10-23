@@ -15,6 +15,9 @@ import investmentRoutes from './routes/investmentRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import recurringRoutes from './routes/recurringRoutes.js';
+import scenarioRoutes from './routes/scenarioRoutes.js';
+import receiptRoutes from './routes/receiptRoutes.js';
+import netWorthRoutes from './routes/netWorthRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -65,7 +68,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.set('trust proxy', 1);
 
 // Routes
@@ -79,6 +83,9 @@ app.use('/api/investments', investmentRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/scenarios', scenarioRoutes);
+app.use('/api/receipts', receiptRoutes);
+app.use('/api/net-worth', netWorthRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {

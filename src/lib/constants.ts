@@ -1,8 +1,9 @@
 import {
-  Home, ArrowLeftRight, Wallet, FileText, Sparkles, User, Settings,
+  Home, ArrowLeftRight, Wallet, FileText, User, Settings,
   TrendingUp, TrendingDown, PiggyBank, Target, BarChart3, ShoppingCart,
   Car, UtensilsCrossed, Plane, Home as HomeIcon, HeartPulse, Film,
   Briefcase, Gift, Zap, BookOpen, Dumbbell, Wrench, Repeat, CreditCard, Receipt,
+  Bot, Sliders, ScanLine, Landmark,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -14,14 +15,17 @@ export type NavLink = {
 
 export const dashboardNav: NavLink[] = [
   { to: '/app', label: 'Dashboard', icon: Home },
-  { to: '/app/transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { to: '/app/recurring', label: 'Recurring', icon: Repeat },
-  { to: '/app/budget', label: 'Budget', icon: Wallet },
+  { to: '/app/ai-coach', label: 'AI Financial Coach', icon: Bot },
   { to: '/app/goals', label: 'Savings Goals', icon: Target },
-  { to: '/app/investments', label: 'Investments', icon: TrendingUp },
   { to: '/app/subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { to: '/app/simulator', label: 'What-If Simulator', icon: Sliders },
+  { to: '/app/receipts', label: 'Receipt Scanner', icon: ScanLine },
+  { to: '/app/net-worth', label: 'Net Worth', icon: Landmark },
+  { to: '/app/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { to: '/app/budget', label: 'Budget', icon: Wallet },
+  { to: '/app/investments', label: 'Investments', icon: TrendingUp },
+  { to: '/app/recurring', label: 'Recurring', icon: Repeat },
   { to: '/app/reports', label: 'Reports', icon: FileText },
-  { to: '/app/ai-assistant', label: 'AI Advisor', icon: Sparkles },
   { to: '/app/profile', label: 'Profile', icon: User },
   { to: '/app/settings', label: 'Settings', icon: Settings },
 ];

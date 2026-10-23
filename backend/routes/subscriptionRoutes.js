@@ -3,6 +3,8 @@ import {
   getSubscriptions,
   createSubscription,
   updateSubscription,
+  toggleSubscriptionStatus,
+  logSubscriptionPaymentAsTransaction,
   deleteSubscription,
 } from '../controllers/subscriptionController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -18,5 +20,8 @@ router.route('/')
 router.route('/:id')
   .put(updateSubscription)
   .delete(deleteSubscription);
+
+router.patch('/:id/status', toggleSubscriptionStatus);
+router.post('/:id/log-payment', logSubscriptionPaymentAsTransaction);
 
 export default router;

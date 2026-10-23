@@ -13,7 +13,10 @@ import GoalsPage from './pages/GoalsPage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import ReportsPage from './pages/ReportsPage';
-import AiAssistantPage from './pages/AiAssistantPage';
+import AiCoachPage from './pages/AiCoachPage';
+import WhatIfSimulatorPage from './pages/WhatIfSimulatorPage';
+import ReceiptScannerPage from './pages/ReceiptScannerPage';
+import NetWorthPage from './pages/NetWorthPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -27,14 +30,18 @@ export default function App() {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
       <Route path="/app" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route index element={<DashboardPage />} />
+        <Route path="ai-coach" element={<AiCoachPage />} />
+        <Route path="ai-assistant" element={<AiCoachPage />} />
+        <Route path="goals" element={<GoalsPage />} />
+        <Route path="subscriptions" element={<SubscriptionsPage />} />
+        <Route path="simulator" element={<WhatIfSimulatorPage />} />
+        <Route path="receipts" element={<ReceiptScannerPage />} />
+        <Route path="net-worth" element={<NetWorthPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="recurring" element={<RecurringPage />} />
         <Route path="budget" element={<BudgetPage />} />
-        <Route path="goals" element={<GoalsPage />} />
         <Route path="investments" element={<InvestmentsPage />} />
-        <Route path="subscriptions" element={<SubscriptionsPage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="ai-assistant" element={<AiAssistantPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

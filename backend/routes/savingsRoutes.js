@@ -4,6 +4,8 @@ import {
   getSavingsGoals,
   updateSavingsGoal,
   addSavingsAmount,
+  recordGoalTransaction,
+  toggleGoalStatus,
   deleteSavingsGoal,
 } from '../controllers/savingsController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -21,5 +23,7 @@ router.route('/:id')
   .delete(deleteSavingsGoal);
 
 router.patch('/:id/add', addSavingsAmount);
+router.post('/:id/transaction', recordGoalTransaction);
+router.patch('/:id/status', toggleGoalStatus);
 
 export default router;

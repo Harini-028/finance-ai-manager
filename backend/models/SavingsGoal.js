@@ -27,6 +27,44 @@ const savingsGoalSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    monthlyContribution: {
+      type: Number,
+      default: 0,
+      min: [0, 'Monthly contribution cannot be negative'],
+    },
+    category: {
+      type: String,
+      trim: true,
+      default: 'General',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'paused', 'completed'],
+      default: 'active',
+    },
+    history: [
+      {
+        type: {
+          type: String,
+          enum: ['deposit', 'withdrawal'],
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+          min: [0.01, 'Amount must be greater than 0'],
+        },
+        date: {
+          type: Date,
+          default: Date.now,
+        },
+        note: {
+          type: String,
+          trim: true,
+          default: '',
+        },
+      },
+    ],
     description: {
       type: String,
       trim: true,
