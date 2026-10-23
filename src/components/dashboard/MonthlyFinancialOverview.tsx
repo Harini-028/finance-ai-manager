@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import {
-  ArrowUpRight, ArrowDownRight, BarChart2, Wallet,
+  ArrowUpRight, ArrowDownRight, BarChart3, Wallet,
 } from 'lucide-react';
 import { formatCurrency, formatCompact } from '../../lib/format';
 import { getCategoryMeta } from '../../lib/constants';
@@ -67,7 +67,7 @@ export function MonthlyFinancialOverview({
         <div>
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-brand text-white shadow-soft shrink-0">
-              <BarChart2 className="h-5 w-5" />
+              <BarChart3 className="h-5 w-5" />
             </div>
             <div>
               <h3 className="font-display font-bold text-lg text-ink-900 dark:text-white">

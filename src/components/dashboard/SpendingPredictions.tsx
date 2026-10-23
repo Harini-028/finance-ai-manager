@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Sparkles, TrendingUp, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
+import { Sparkles, TrendingUp, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
@@ -226,7 +226,7 @@ export function SpendingPredictions({
               </div>
             ) : (
               <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-2.5 text-xs text-emerald-600 dark:text-emerald-400">
-                <CheckCircle className="h-4 w-4 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>All category spending levels are well-balanced and within healthy thresholds.</span>
               </div>
             )}

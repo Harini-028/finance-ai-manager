@@ -132,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { error: res.data.message || 'Registration failed' };
     } catch (err: any) {
+      if (!err.response) {
+        return { error: 'Unable to connect to backend server. Please make sure the backend is running on http://localhost:5000' };
+      }
       const msg = err.response?.data?.message || err.message || 'Registration failed';
       return { error: msg };
     }
@@ -176,6 +179,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { error: res.data.message || 'Login failed' };
     } catch (err: any) {
+      if (!err.response) {
+        return { error: 'Unable to connect to backend server. Please make sure the backend is running on http://localhost:5000' };
+      }
       const msg = err.response?.data?.message || err.message || 'Invalid email or password';
       return { error: msg };
     }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Bell, AlertTriangle, AlertCircle, Info, CheckCircle, X, ArrowRight, ShieldCheck,
+  Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, X, ArrowRight, ShieldCheck,
 } from 'lucide-react';
 
 export type SmartAlert = {
@@ -51,7 +51,7 @@ export function SmartAlertsSection({ alerts }: SmartAlertsSectionProps) {
     success: {
       border: 'border-emerald-500/30',
       bg: 'bg-emerald-500/5',
-      icon: CheckCircle,
+      icon: CheckCircle2,
       iconColor: 'text-emerald-500',
       badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     },
