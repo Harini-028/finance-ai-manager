@@ -131,21 +131,29 @@ FinPilot AI is a modern, full-stack personal finance and wealth management platf
 
 ## 🚀 Running the Application Locally
 
-### 1. Backend Setup & Startup
+### Quick Start (Both Backend & Frontend in One Command)
 
+From the project root:
+```bash
+npm run dev:all    # Concurrently starts both backend (port 5000) and frontend (port 5173)
+```
+
+---
+
+### Alternative: Running in Separate Terminals
+
+#### Terminal 1 — Backend:
 ```bash
 cd backend
-npm install
-npm run dev    # Starts with nodemon (or `npm start`)
+npm run dev        # Starts Express server on http://localhost:5000 (with nodemon)
+# or: npm start
 ```
 
 *Note: If a local MongoDB instance is not detected on `mongodb://localhost:27017`, the backend automatically spins up an in-memory MongoDB server (`mongodb-memory-server`) with zero external configuration required.*
 
-### 2. Frontend Setup & Startup
-
+#### Terminal 2 — Frontend:
 ```bash
 # In the project root:
-npm install
 npm run dev       # Starts Vite dev server on http://localhost:5173
 npm run build     # Compiles production bundle
 npm run typecheck # Validates 100% TypeScript type safety
